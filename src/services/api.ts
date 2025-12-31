@@ -11,7 +11,7 @@ function setSession(session: any) {
   localStorage.setItem(LS_KEY, JSON.stringify(session));
 }
 
-// HOST sin /api (recomendado). Ej: http://127.0.0.1:8000
+// HOST sin /api
 const API_HOST = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 export const api = axios.create({
@@ -23,7 +23,8 @@ api.interceptors.request.use((config) => {
   const token = session?.tokens?.access;
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
-  const isFormData = typeof FormData !== "undefined" && config.data instanceof FormData;
+  const isFormData =
+    typeof FormData !== "undefined" && config.data instanceof FormData;
 
   if (isFormData) {
     if (config.headers && "Content-Type" in config.headers) {
@@ -54,11 +55,13 @@ api.interceptors.response.use(
         const refresh = session?.tokens?.refresh;
         if (!refresh) throw err;
 
-        // axios sin interceptores
         const r = await axios.post(`${API_HOST}/api/token/refresh/`, { refresh });
         const newAccess = r.data.access;
 
-        setSession({ ...session, tokens: { ...session.tokens, access: newAccess } });
+        setSession({
+          ...session,
+          tokens: { ...session.tokens, access: newAccess },
+        });
         return newAccess;
       })().finally(() => {
         refreshing = null;
