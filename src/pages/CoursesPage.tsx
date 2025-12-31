@@ -223,7 +223,7 @@ export function CoursesPage() {
       </div>
 
       {loading ? (
-        <div className="card">Cargando cursos…</div>
+        <div className="card">Conectando con la DataBase, espero un momento por favor...</div>
       ) : items.length === 0 ? (
         <div className="card">
           <div className="text-sm font-semibold text-slate-900">
