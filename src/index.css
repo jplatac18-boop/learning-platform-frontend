@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@reference "tailwindcss/theme.css";
 
 /* Base global usando Tailwind utilities */
 @layer base {
@@ -34,7 +33,10 @@
   }
 
   /* Tipografía base */
-  body, input, button, textarea {
+  body,
+  input,
+  button,
+  textarea {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
       "Segoe UI", sans-serif;
   }
@@ -133,4 +135,3 @@
     opacity: 1;
   }
 }
-
