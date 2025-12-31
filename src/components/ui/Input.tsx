@@ -1,4 +1,4 @@
-import React, { forwardRef, useId } from "react";
+import { forwardRef, useId } from "react";
 import type { InputHTMLAttributes } from "react";
 
 type Props = InputHTMLAttributes<HTMLInputElement> & {
