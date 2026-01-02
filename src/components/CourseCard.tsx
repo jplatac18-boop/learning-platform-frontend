@@ -26,23 +26,23 @@ export function CourseCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">
-            {course.titulo}
+            {course.title}
           </div>
           <p className="mt-2 line-clamp-3 text-sm text-slate-700">
-            {course.descripcion}
+            {course.description}
           </p>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2 text-xs">
         <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-          {course.categoria}
+          {course.category}
         </span>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-          {course.nivel}
+          {course.level}
         </span>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-          {course.duracion} min
+          {course.duration} min
         </span>
       </div>
 
@@ -50,7 +50,9 @@ export function CourseCard({
         <div className="mt-4">
           <div className="mb-1 flex items-center justify-between text-xs text-slate-600">
             <span>Progreso</span>
-            <span className="font-semibold text-blue-600">{progress}%</span>
+            <span className="font-semibold text-blue-600">
+              {progress}%
+            </span>
           </div>
           <ProgressBar value={progress} />
         </div>

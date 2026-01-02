@@ -1,28 +1,28 @@
-export type EnrollmentEstado = "activo" | "inactivo";
+export type EnrollmentStatus = "active" | "inactive";
 
 export interface Enrollment {
   id: number;
-  user: number;
-  course: number;
-  fecha: string;      // ISO-8601 [web:1204]
-  estado: EnrollmentEstado;
-  progreso: number;   // 0..100
+  userId: number;
+  courseId: number;
+  enrolledAt: string;      // ISO-8601
+  status: EnrollmentStatus;
+  progress: number;        // 0..100
 }
 
 export interface LessonProgress {
   id: number;
-  enrollment: number;
-  lesson: number;
-  completado: boolean;
-  completed_at: string | null; // ISO-8601 o null [web:1204]
+  enrollmentId: number;
+  lessonId: number;
+  completed: boolean;
+  completedAt: string | null; // ISO-8601 o null
 }
 
 export interface Submission {
   id: number;
-  user: number;
-  quiz: number;
+  userId: number;
+  quizId: number;
   attempt: number;
   score: number;
   answers: Record<string, number>;
-  fecha: string; // ISO-8601 [web:1204]
+  submittedAt: string;       // ISO-8601
 }

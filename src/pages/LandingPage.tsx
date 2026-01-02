@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Course } from "../types/courses";
-import { listCourses } from "../services/courseService";
+import { listCourses } from "../services/coursesService.ts";
 import { useToast } from "../components/ui/ToastProvider";
 import { getErrorMessage } from "../services/errors";
 import { CourseCard } from "../components/CourseCard";
@@ -26,9 +26,7 @@ export function LandingPage() {
       setLoading(true);
       try {
         const r = await listCourses({ page: 1 });
-        const safeItems: Course[] = Array.isArray(r.items)
-          ? r.items
-          : [];
+        const safeItems: Course[] = Array.isArray(r.items) ? r.items : [];
         if (!alive) return;
         setCourses(safeItems);
       } catch (e) {

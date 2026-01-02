@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import type { Course } from "../types/courses";
 import type { Enrollment } from "../types/enrollments";
 import { myEnrollments } from "../services/enrollmentService";
-import { getCourseDetail } from "../services/courseService";
+import { getCourseDetail } from "../services/coursesService";
 import { Button } from "../components/ui/Button";
 import { useToast } from "../components/ui/ToastProvider";
 import { getErrorMessage } from "../services/errors";
@@ -19,7 +19,7 @@ export function MyCoursesPage() {
   const [coursesById, setCoursesById] = useState<CourseMap>({});
 
   const activeEnrollments = useMemo(
-    () => enrollments.filter((e) => e.estado === "activo"),
+    () => enrollments.filter((e) => e.status === "active"),
     [enrollments]
   );
 
@@ -33,7 +33,9 @@ export function MyCoursesPage() {
 
       setEnrollments(items);
 
-      const uniqueCourseIds = Array.from(new Set(items.map((e) => e.course)));
+      const uniqueCourseIds = Array.from(
+        new Set(items.map((e) => e.courseId))
+      );
       const missing = uniqueCourseIds.filter((cid) => !coursesById[cid]);
 
       if (missing.length > 0) {
@@ -53,7 +55,10 @@ export function MyCoursesPage() {
         });
       }
     } catch (e) {
-      toast.error(getErrorMessage(e, "No se pudieron cargar tus cursos."), "Mis cursos");
+      toast.error(
+        getErrorMessage(e, "No se pudieron cargar tus cursos."),
+        "Mis cursos"
+      );
     } finally {
       if (isAlive()) setLoading(false);
     }
@@ -69,40 +74,9 @@ export function MyCoursesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      const ids = Array.from(new Set(enrollments.map((e) => e.course)));
-      const missing = ids.filter((cid) => !coursesById[cid]);
-      if (missing.length === 0) return;
-
-      try {
-        const pairs = await Promise.all(
-          missing.map(async (cid) => {
-            const c = await getCourseDetail(cid);
-            return [cid, c] as const;
-          })
-        );
-
-        if (!alive) return;
-
-        setCoursesById((prev) => {
-          const next: CourseMap = { ...prev };
-          for (const [cid, c] of pairs) next[cid] = c;
-          return next;
-        });
-      } catch {
-        // silencioso
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [enrollments, coursesById]);
-
-  if (loading) return <div className="card text-left">Cargando tus cursos…</div>;
+  if (loading) {
+    return <div className="card text-left">Cargando tus cursos…</div>;
+  }
 
   if (activeEnrollments.length === 0) {
     return (
@@ -156,7 +130,7 @@ export function MyCoursesPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {activeEnrollments.map((e) => {
-          const c = coursesById[e.course];
+          const c = coursesById[e.courseId];
 
           if (!c) {
             return (
@@ -164,7 +138,7 @@ export function MyCoursesPage() {
                 key={e.id}
                 className="card text-left text-sm text-slate-500"
               >
-                Cargando detalle del curso #{e.course}…
+                Cargando detalle del curso #{e.courseId}…
               </div>
             );
           }
@@ -173,8 +147,8 @@ export function MyCoursesPage() {
             <CourseCard
               key={e.id}
               course={c}
-              to={`/courses/${e.course}`}
-              progress={e.progreso}
+              to={`/courses/${e.courseId}`}
+              progress={e.progress}
               primaryActionLabel="Continuar"
               secondaryActionLabel="Ver detalles"
             />

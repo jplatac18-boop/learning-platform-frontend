@@ -17,7 +17,6 @@ const selectBase =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500";
 
 function isValidEmail(v: string) {
-  // validación simple (frontend). Backend igual validará.
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
 
@@ -73,16 +72,7 @@ export function RegisterPage() {
       toast.success("Usuario creado. Ahora inicia sesión.", "Registro");
       navigate("/login", { replace: true });
     } catch (e2: any) {
-      const data = e2?.response?.data;
-
-      const msg =
-        data?.username?.[0] ??
-        data?.email?.[0] ??
-        data?.password?.[0] ??
-        data?.role?.[0] ??
-        data?.detail ??
-        getErrorMessage(e2, "No se pudo crear el usuario.");
-
+      const msg = getErrorMessage(e2, "No se pudo crear el usuario.");
       setErr(msg);
       toast.error(msg, "Registro");
     } finally {

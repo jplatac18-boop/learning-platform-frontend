@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
-import { loginRequest, meRequest } from "../services/authService";
+import { loginRequest } from "../services/authService";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../components/ui/ToastProvider";
 import { getErrorMessage } from "../services/errors";
@@ -32,6 +32,10 @@ export function LoginPage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = "Login | Learning Platform";
+  }, []);
+
+  useEffect(() => {
     if (isAuthenticated) {
       navigate("/", { replace: true });
     }
@@ -45,17 +49,11 @@ export function LoginPage() {
 
     setBusy(true);
     try {
-      const tokens = await loginRequest(username.trim(), password);
-
-      localStorage.setItem(
-        "lp_session",
-        JSON.stringify({
-          user: null,
-          tokens,
-        })
+      const { user, tokens } = await loginRequest(
+        username.trim(),
+        password
       );
 
-      const user = await meRequest();
       login({ user, tokens });
 
       toast.success("Bienvenido.", "Login");

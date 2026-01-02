@@ -10,8 +10,8 @@ import {
   instructorListCourses,
 } from "../services/instructorService";
 
-type CourseCategoria = "programacion" | "diseno" | "datos";
-type CourseNivel = "basico" | "intermedio" | "avanzado";
+type CourseCategory = "programacion" | "diseno" | "datos";
+type CourseLevel = "basico" | "intermedio" | "avanzado";
 
 const selectBase =
   "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500";
@@ -24,11 +24,10 @@ export function InstructorCoursesPage() {
   const [items, setItems] = useState<Course[]>([]);
 
   const [creating, setCreating] = useState(false);
-  const [titulo, setTitulo] = useState("");
-  const [categoria, setCategoria] =
-    useState<CourseCategoria>("programacion");
-  const [nivel, setNivel] = useState<CourseNivel>("basico");
-  const [duracion, setDuracion] = useState<number>(60);
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<CourseCategory>("programacion");
+  const [level, setLevel] = useState<CourseLevel>("basico");
+  const [duration, setDuration] = useState<number>(60);
 
   async function load() {
     setLoading(true);
@@ -52,21 +51,21 @@ export function InstructorCoursesPage() {
   }, []);
 
   async function onCreate() {
-    if (!titulo.trim()) return;
+    if (!title.trim()) return;
 
     setCreating(true);
     try {
       const c = await instructorCreateCourse({
-        titulo: titulo.trim(),
-        descripcion: "Descripción pendiente",
-        categoria,
-        nivel,
-        duracion: Number(duracion) || 0,
-        estado: "borrador",
+        title: title.trim(),
+        description: "Descripción pendiente",
+        category,
+        level,
+        duration: Number(duration) || 0,
+        status: "draft",
       });
 
       toast.success("Curso creado.", "Instructor");
-      setTitulo("");
+      setTitle("");
       await load();
 
       navigate(`/instructor/courses/${c.id}/edit`, { replace: false });
@@ -86,11 +85,7 @@ export function InstructorCoursesPage() {
         <h1 className="text-xl font-bold text-slate-900">
           Mis cursos (Instructor)
         </h1>
-        <Button
-          variant="secondary"
-          onClick={load}
-          disabled={loading}
-        >
+        <Button variant="secondary" onClick={load} disabled={loading}>
           Recargar
         </Button>
       </div>
@@ -104,18 +99,16 @@ export function InstructorCoursesPage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-2">
             <Input
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               placeholder="Título del curso"
             />
           </div>
 
           <select
             className={selectBase}
-            value={categoria}
-            onChange={(e) =>
-              setCategoria(e.target.value as CourseCategoria)
-            }
+            value={category}
+            onChange={(e) => setCategory(e.target.value as CourseCategory)}
           >
             <option value="programacion">Programación</option>
             <option value="diseno">Diseño</option>
@@ -124,12 +117,10 @@ export function InstructorCoursesPage() {
 
           <select
             className={selectBase}
-            value={nivel}
-            onChange={(e) =>
-              setNivel(e.target.value as CourseNivel)
-            }
+            value={level}
+            onChange={(e) => setLevel(e.target.value as CourseLevel)}
           >
-            <option value="basico">basico</option>
+            <option value="basico">básico</option>
             <option value="intermedio">intermedio</option>
             <option value="avanzado">avanzado</option>
           </select>
@@ -137,20 +128,15 @@ export function InstructorCoursesPage() {
           <div className="sm:col-span-2 lg:col-span-1">
             <Input
               type="number"
-              value={duracion}
-              onChange={(e) =>
-                setDuracion(Number(e.target.value))
-              }
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
               placeholder="Duración (min)"
               min={0}
             />
           </div>
 
           <div className="sm:col-span-2 lg:col-span-3">
-            <Button
-              onClick={onCreate}
-              disabled={creating || !titulo.trim()}
-            >
+            <Button onClick={onCreate} disabled={creating || !title.trim()}>
               Crear
             </Button>
           </div>
@@ -158,9 +144,7 @@ export function InstructorCoursesPage() {
 
         <div className="text-xs text-slate-600">
           El curso se crea en{" "}
-          <span className="font-semibold text-slate-900">
-            borrador
-          </span>{" "}
+          <span className="font-semibold text-slate-900">borrador</span>{" "}
           con una descripción temporal.
         </div>
       </div>
@@ -179,19 +163,19 @@ export function InstructorCoursesPage() {
             >
               <div>
                 <div className="text-lg font-semibold text-slate-900">
-                  {c.titulo}
+                  {c.title}
                 </div>
 
                 <div className="mt-2 flex flex-wrap gap-2 text-xs">
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                    {c.categoria}
+                    {c.category}
                   </span>
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                    {c.nivel}
+                    {c.level}
                   </span>
-                  {typeof c.duracion !== "undefined" && (
+                  {typeof c.duration !== "undefined" && (
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                      {c.duracion} min
+                      {c.duration} min
                     </span>
                   )}
                 </div>

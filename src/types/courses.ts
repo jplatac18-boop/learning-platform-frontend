@@ -1,73 +1,82 @@
-export type CourseEstado = "borrador" | "publicado";
+// src/types/courses.ts
 
+// Estado del curso
+export type CourseStatus = "draft" | "published";
+
+// Nivel del curso
+export type CourseLevel = "basico" | "intermedio" | "avanzado";
+
+// Curso
 export interface Course {
   id: number;
-  titulo: string;
-  descripcion: string;
-  categoria: string;
+  title: string;
+  description: string;
+  category: string;
 
-  /**
-   * En tu backend es CharField (no enum fijo).
-   * Si quieres, luego lo convertimos a union basado en valores reales.
-   */
-  nivel: string;
+  level: CourseLevel;  // antes: string
 
-  duracion: number;
-  imagen: string;      // en tu modelo es URLField default ""
-  estado: CourseEstado;
+  duration: number;
+  imageUrl: string;      // antes: imagen
+  status: CourseStatus;  // antes: CourseEstado
 
-  created_at: string;  // ISO-8601 [web:1204]
-  updated_at: string;  // ISO-8601 [web:1204]
+  createdAt: string;     // ISO-8601
+  updatedAt: string;     // ISO-8601
 
-  // depende de tu serializer: a veces viene como id, a veces objeto anidado
-  instructor?: number | { id: number; user?: number; username?: string };
+  instructor?:
+    | number
+    | {
+        id: number;
+        userId?: number;
+        username?: string;
+      };
 }
 
+// Módulo
 export interface Module {
   id: number;
-  course: number;
-  titulo: string;
-  orden: number;
+  courseId: number;
+  title: string;
+  order: number;
 }
 
-export type LessonTipo = "video" | "texto" | "archivo";
+// Tipo de lección
+export type LessonType = "video" | "text" | "file";
 
+// Lección
 export interface Lesson {
   id: number;
-  module: number;
-  titulo: string;
-  tipo: LessonTipo;
+  moduleId: number;
+  title: string;
+  type: LessonType;
 
-  contenido: string;
-  url_video: string;
+  content: string;
+  videoUrl: string;
+  fileUrl: string | null;
 
-  // En DRF, FileField suele devolver URL (string) o null si no hay archivo
-  archivo: string | null;
-
-  orden: number;
+  order: number;
 }
 
-/**
- * OJO: tu Quiz puede colgar de course o module, uno de los dos.
- */
+// Quiz
 export interface Quiz {
   id: number;
-  course: number | null;
-  module: number | null;
-  titulo: string;
-  descripcion: string;
+  courseId: number | null;
+  moduleId: number | null;
+  title: string;
+  description: string;
 }
 
+// Pregunta
 export interface Question {
   id: number;
-  quiz: number;
-  texto: string;
-  orden: number;
+  quizId: number;
+  text: string;
+  order: number;
 }
 
+// Opción
 export interface Choice {
   id: number;
-  question: number;
-  texto: string;
-  correcta: boolean;
+  questionId: number;
+  text: string;
+  isCorrect: boolean;
 }

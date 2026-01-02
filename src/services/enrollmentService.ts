@@ -1,25 +1,126 @@
-import { api } from "./api";
+// src/services/enrollmentService.ts
 import type { Enrollment, LessonProgress } from "../types/enrollments";
+import { storage, type DataStore } from "./storage";
+import { getSession } from "./session"; // el que ya tienes
 
-export async function enroll(course_id: number) {
-  const res = await api.post<Enrollment>("enrollments/enrollments/enroll/", { course_id });
-  return res.data;
+function currentUserId(): number {
+  const session = getSession();
+  return session?.user.id ?? 1; // demo
 }
 
-export async function myEnrollments() {
-  const res = await api.get<Enrollment[]>("enrollments/enrollments/my/");
-  return res.data;
+export async function enroll(courseId: number): Promise<Enrollment> {
+  const data = storage.readStore() as DataStore;
+
+  const userId = currentUserId();
+
+  const existing = data.enrollments.find(
+    (e) =>
+      e.courseId === courseId &&
+      e.userId === userId &&
+      e.status === "active"
+  );
+  if (existing) return existing;
+
+  const id = storage.nextId(data.enrollments);
+  const now = new Date().toISOString();
+
+  const enrollment: Enrollment = {
+    id,
+    userId,
+    courseId,
+    enrolledAt: now,
+    status: "active",
+    progress: 0,
+  };
+
+  data.enrollments.push(enrollment);
+  storage.writeStore(data);
+  return enrollment;
 }
 
-export async function markLessonCompleted(lesson_id: number) {
-  const res = await api.post<LessonProgress>("enrollments/lesson-progress/complete/", { lesson_id });
-  return res.data;
+export async function myEnrollments(): Promise<Enrollment[]> {
+  const data = storage.readStore() as DataStore;
+  const userId = currentUserId();
+  return data.enrollments.filter((e) => e.userId === userId);
 }
 
-// NUEVO: progreso de lecciones por curso para el usuario actual
-export async function lessonProgressByCourse(course_id: number) {
-  const res = await api.get<LessonProgress[]>("enrollments/lesson-progress/", {
-    params: { course_id },
-  });
-  return res.data;
+export async function markLessonCompleted(
+  lessonId: number
+): Promise<LessonProgress> {
+  const data = storage.readStore() as DataStore;
+  const userId = currentUserId();
+
+  const lesson = data.lessons.find((l) => l.id === lessonId);
+  if (!lesson) throw new Error("Lesson not found");
+
+  const module = data.modules.find((m) => m.id === lesson.moduleId);
+  if (!module) throw new Error("Module not found for lesson");
+  const courseId = module.courseId;
+
+  const enrollment = data.enrollments.find(
+    (e) =>
+      e.courseId === courseId &&
+      e.userId === userId &&
+      e.status === "active"
+  );
+  if (!enrollment) throw new Error("Enrollment not found");
+
+  let lp = data.lessonProgress.find(
+    (p) => p.lessonId === lessonId && p.enrollmentId === enrollment.id
+  );
+  const now = new Date().toISOString();
+
+  if (!lp) {
+    const id = storage.nextId(data.lessonProgress);
+    lp = {
+      id,
+      enrollmentId: enrollment.id,
+      lessonId,
+      completed: true,
+      completedAt: now,
+    };
+    data.lessonProgress.push(lp);
+  } else {
+    lp.completed = true;
+    lp.completedAt = now;
+  }
+
+  const lessonsInCourseIds = data.lessons
+    .filter((l) => {
+      const m = data.modules.find((mm) => mm.id === l.moduleId);
+      return m && m.courseId === courseId;
+    })
+    .map((l) => l.id);
+
+  const completedCount = data.lessonProgress.filter(
+    (p) =>
+      p.enrollmentId === enrollment.id &&
+      p.completed &&
+      lessonsInCourseIds.includes(p.lessonId)
+  ).length;
+
+  const total = lessonsInCourseIds.length || 1;
+  const progressPercent = Math.round((completedCount / total) * 100);
+
+  enrollment.progress = progressPercent;
+
+  storage.writeStore(data);
+  return lp;
+}
+
+export async function lessonProgressByCourse(
+  courseId: number
+): Promise<LessonProgress[]> {
+  const data = storage.readStore() as DataStore;
+  const userId = currentUserId();
+
+  const enrollment = data.enrollments.find(
+    (e) =>
+      e.courseId === courseId &&
+      e.userId === userId &&
+      e.status === "active"
+  );
+  if (!enrollment) return [];
+
+  return data.lessonProgress.filter((p) => p.enrollmentId === enrollment.id);
 }

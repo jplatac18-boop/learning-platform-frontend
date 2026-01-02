@@ -1,30 +1,63 @@
-import { api } from "./api";
+// src/services/coursesContentServices.ts
 import type { Quiz, Question, Choice } from "../types/courses";
+import { storage } from "./storage";
 
 /**
  * Quizzes:
- * - Puede filtrar por course_id o module_id (según tu backend)
- * Endpoint: /api/courses/quizzes/
+ * - Puede filtrar por courseId o moduleId
  */
-export async function getQuizzes(params?: { course_id?: number; module_id?: number }) {
-  const res = await api.get<Quiz[]>("courses/quizzes/", { params });
-  return res.data;
+export async function getQuizzes(params?: {
+  courseId?: number;
+  moduleId?: number;
+}): Promise<Quiz[]> {
+  const data = storage.readStore();
+  let quizzes = data.quizzes;
+
+  if (params?.courseId) {
+    const moduleIds = data.modules
+      .filter((m) => m.courseId === params.courseId)
+      .map((m) => m.id);
+
+    quizzes = quizzes.filter(
+      (q) =>
+        q.courseId === params.courseId ||
+        (q.moduleId != null && moduleIds.includes(q.moduleId))
+    );
+  }
+
+  if (params?.moduleId) {
+    quizzes = quizzes.filter((q) => q.moduleId === params.moduleId);
+  }
+
+  return quizzes;
 }
 
 /**
- * Questions:
- * Endpoint: /api/courses/questions/?quiz_id=123
+ * Questions por quiz.
  */
-export async function getQuestions(params?: { quiz_id?: number }) {
-  const res = await api.get<Question[]>("courses/questions/", { params });
-  return res.data;
+export async function getQuestions(params?: {
+  quizId?: number;
+}): Promise<Question[]> {
+  const data = storage.readStore();
+
+  if (params?.quizId) {
+    return data.questions.filter((q) => q.quizId === params.quizId);
+  }
+
+  return data.questions;
 }
 
 /**
- * Choices:
- * Endpoint: /api/courses/choices/?question_id=456
+ * Choices por pregunta.
  */
-export async function getChoices(params?: { question_id?: number }) {
-  const res = await api.get<Choice[]>("courses/choices/", { params });
-  return res.data;
+export async function getChoices(params?: {
+  questionId?: number;
+}): Promise<Choice[]> {
+  const data = storage.readStore();
+
+  if (params?.questionId) {
+    return data.choices.filter((c) => c.questionId === params.questionId);
+  }
+
+  return data.choices;
 }

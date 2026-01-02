@@ -4,7 +4,7 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { useToast } from "../components/ui/ToastProvider";
 import { getErrorMessage } from "../services/errors";
-import { listCourses } from "../services/courseService";
+import { listCourses } from "../services/coursesService";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import type { Course } from "../types/courses";
 import type { Enrollment } from "../types/enrollments";
@@ -12,10 +12,9 @@ import { myEnrollments } from "../services/enrollmentService";
 import { useAuth } from "../hooks/useAuth";
 
 /**
- * Ajusta estos valores a los reales del backend (Course.nivel).
- * En tu backend venías usando valores tipo basico/intermedio/avanzado.
+ * Ajusta estos valores a los reales del backend (Course.level).
  */
-const niveles = ["basico", "intermedio", "avanzado"] as const;
+const levels = ["basico", "intermedio", "avanzado"] as const;
 
 export function CoursesPage() {
   const toast = useToast();
@@ -31,18 +30,17 @@ export function CoursesPage() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 450);
 
-  const [categoria, setCategoria] = useState("");
-  const [nivel, setNivel] = useState("");
+  const [category, setCategory] = useState("");
+  const [level, setLevel] = useState("");
   const [ordering, setOrdering] = useState("");
 
-  // enrollments del usuario para mostrar progreso
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loadingEnrollments, setLoadingEnrollments] = useState(false);
 
   // Si cambian filtros, vuelve a página 1
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, categoria, nivel, ordering]);
+  }, [debouncedSearch, category, level, ordering]);
 
   // cargar cursos
   useEffect(() => {
@@ -54,8 +52,8 @@ export function CoursesPage() {
         const r = await listCourses({
           page,
           search: debouncedSearch.trim() || undefined,
-          categoria: categoria || undefined,
-          nivel: nivel || undefined,
+          category: category || undefined,
+          level: level || undefined,
           ordering: ordering || undefined,
         });
 
@@ -78,7 +76,7 @@ export function CoursesPage() {
     return () => {
       alive = false;
     };
-  }, [page, debouncedSearch, categoria, nivel, ordering, toast]);
+  }, [page, debouncedSearch, category, level, ordering, toast]);
 
   // cargar enrollments del usuario para progreso
   useEffect(() => {
@@ -96,7 +94,7 @@ export function CoursesPage() {
         setEnrollments(data);
       })
       .catch(() => {
-        // silencioso en landing
+        // silencioso
       })
       .finally(() => {
         if (alive) setLoadingEnrollments(false);
@@ -107,37 +105,19 @@ export function CoursesPage() {
     };
   }, [user]);
 
-  /**
-   * DRF paginado: next/previous serán null o URL (string).
-   * Si el backend NO pagina y te devuelve array, tu service setea next/previous a null,
-   * así que aquí tratamos eso como "sin paginación real".
-   */
-  const isPaginated = useMemo(
-    () => typeof count === "number" && count > items.length,
-    [count, items.length]
-  );
-
-  const totalPagesApprox = useMemo(() => {
-    const pageSizeGuess = 10;
+  const totalPages = useMemo(() => {
+    const pageSizeGuess = items.length || 1;
     return Math.max(1, Math.ceil(count / pageSizeGuess));
-  }, [count]);
+  }, [count, items.length]);
 
-  const canPrev = useMemo(() => {
-    if (isPaginated) return previous !== null; // DRF
-    return page > 1; // fallback
-  }, [isPaginated, previous, page]);
+  const canPrev = page > 1 && previous !== null;
+  const canNext = !!next;
 
-  const canNext = useMemo(() => {
-    if (isPaginated) return next !== null; // DRF
-    return page < totalPagesApprox; // fallback
-  }, [isPaginated, next, page, totalPagesApprox]);
-
-  // helper para encontrar progreso de un curso
   function getCourseProgress(courseId: number): number | null {
     const enr = enrollments.find(
-      (e) => e.course === courseId && e.estado === "activo"
+      (e) => e.courseId === courseId && e.status === "active"
     );
-    return enr ? enr.progreso ?? 0 : null;
+    return enr ? enr.progress : null;
   }
 
   return (
@@ -162,11 +142,13 @@ export function CoursesPage() {
           </div>
 
           <div>
-            <div className="text-xs font-semibold text-slate-700">Categoría</div>
+            <div className="text-xs font-semibold text-slate-700">
+              Categoría
+            </div>
             <select
               className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500"
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
             >
               <option value="">Todas</option>
               <option value="programacion">Programación</option>
@@ -179,11 +161,11 @@ export function CoursesPage() {
             <div className="text-xs font-semibold text-slate-700">Nivel</div>
             <select
               className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500"
-              value={nivel}
-              onChange={(e) => setNivel(e.target.value)}
+              value={level}
+              onChange={(e) => setLevel(e.target.value)}
             >
               <option value="">Todos</option>
-              {niveles.map((n) => (
+              {levels.map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
@@ -199,10 +181,10 @@ export function CoursesPage() {
               onChange={(e) => setOrdering(e.target.value)}
             >
               <option value="">Relevancia</option>
-              <option value="titulo">Título (A-Z)</option>
-              <option value="-titulo">Título (Z-A)</option>
-              <option value="duracion">Duración (↑)</option>
-              <option value="-duracion">Duración (↓)</option>
+              <option value="title">Título (A-Z)</option>
+              <option value="-title">Título (Z-A)</option>
+              <option value="duration">Duración (↑)</option>
+              <option value="-duration">Duración (↓)</option>
             </select>
           </div>
 
@@ -211,8 +193,8 @@ export function CoursesPage() {
               variant="secondary"
               onClick={() => {
                 setSearch("");
-                setCategoria("");
-                setNivel("");
+                setCategory("");
+                setLevel("");
                 setOrdering("");
               }}
             >
@@ -223,7 +205,9 @@ export function CoursesPage() {
       </div>
 
       {loading ? (
-        <div className="card">Conectando con la DataBase, espero un momento por favor...</div>
+        <div className="card">
+          Cargando cursos desde el almacenamiento local…
+        </div>
       ) : items.length === 0 ? (
         <div className="card">
           <div className="text-sm font-semibold text-slate-900">
@@ -236,7 +220,7 @@ export function CoursesPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((c) => {
-            const progreso = getCourseProgress(c.id);
+            const progress = getCourseProgress(c.id);
             return (
               <div
                 key={c.id}
@@ -244,29 +228,29 @@ export function CoursesPage() {
               >
                 <div>
                   <div className="text-lg font-semibold text-slate-900">
-                    {c.titulo}
+                    {c.title}
                   </div>
                   <p className="mt-2 line-clamp-3 text-sm text-slate-700">
-                    {c.descripcion}
+                    {c.description}
                   </p>
 
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                      {c.categoria}
+                      {c.category}
                     </span>
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                      {c.nivel}
+                      {c.level}
                     </span>
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                      {c.duracion} min
+                      {c.duration} min
                     </span>
                   </div>
 
-                  {user && progreso !== null && (
+                  {user && progress !== null && (
                     <div className="mt-3 text-xs text-slate-700">
                       Progreso:{" "}
                       <span className="font-semibold text-slate-900">
-                        {progreso.toFixed(0)}%
+                        {progress.toFixed(0)}%
                       </span>
                       {loadingEnrollments && " (actualizando…)"}
                     </div>
@@ -276,7 +260,7 @@ export function CoursesPage() {
                 <div className="mt-4">
                   <Link to={`/courses/${c.id}`}>
                     <Button className="w-full">
-                      {progreso !== null ? "Continuar" : "Ver curso"}
+                      {progress !== null ? "Continuar" : "Ver curso"}
                     </Button>
                   </Link>
                 </div>
@@ -296,8 +280,7 @@ export function CoursesPage() {
         </Button>
 
         <div className="text-sm text-slate-600">
-          Página {page}{" "}
-          {count > 0 && !isPaginated ? `• aprox. ${totalPagesApprox}` : ""}
+          Página {page} de {totalPages}
         </div>
 
         <Button

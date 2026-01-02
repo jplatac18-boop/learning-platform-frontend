@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Tabs, TabPanel } from "../components/ui/Tabs";
@@ -9,11 +14,8 @@ import type { Course, Lesson, Module } from "../types/courses";
 import type { Comment } from "../types/feedback";
 import type { Enrollment } from "../types/enrollments";
 
-import {
-  getCourseDetail,
-  studentListModules,
-  studentListLessons,
-} from "../services/courseService";
+import { getCourseDetail } from "../services/coursesService";
+import { getModules, getLessons } from "../services/courseStructure";
 import {
   enroll,
   markLessonCompleted,
@@ -45,7 +47,10 @@ export function CourseDetailPage() {
 
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const enrolled = useMemo(
-    () => enrollments.some((e) => e.course === courseId && e.estado === "activo"),
+    () =>
+      enrollments.some(
+        (e) => e.courseId === courseId && e.status === "active"
+      ),
     [enrollments, courseId]
   );
 
@@ -56,7 +61,6 @@ export function CourseDetailPage() {
     () => new Set()
   );
 
-  // NUEVO: lección seleccionada
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
 
   const [comments, setComments] = useState<Comment[]>([]);
@@ -93,7 +97,7 @@ export function CourseDetailPage() {
     getCourseDetail(courseId)
       .then((c) => {
         setCourse(c);
-        document.title = `${c.titulo} | Learning Platform`;
+        document.title = `${c.title} | Learning Platform`;
       })
       .catch((e) => toast.error(getErrorMessage(e), "Curso"))
       .finally(() => setLoadingCourse(false));
@@ -114,8 +118,8 @@ export function CourseDetailPage() {
 
     try {
       const [m, l, progress] = await Promise.all([
-        studentListModules(courseId),
-        studentListLessons(courseId),
+        getModules({ courseId }),
+        getLessons({ courseId }),
         user && enrolled ? lessonProgressByCourse(courseId) : Promise.resolve([]),
       ]);
 
@@ -123,12 +127,11 @@ export function CourseDetailPage() {
       setLessons(l);
 
       const completed = new Set<number>();
-      for (const p of progress as { lesson: number; completado: boolean }[]) {
-        if (p.completado) completed.add(p.lesson);
+      for (const p of progress) {
+        if (p.completed) completed.add(p.lessonId);
       }
       setCompletedLessonIds(completed);
 
-      // Si no hay lección seleccionada, elegir automáticamente la primera
       if (!selectedLessonId && l.length > 0) {
         setSelectedLessonId(l[0].id);
       }
@@ -148,7 +151,7 @@ export function CourseDetailPage() {
     if (!courseId) return;
     setLoadingComments(true);
     try {
-      const data = await listComments({ course_id: courseId });
+      const data = await listComments({ course: courseId });
       setComments(data);
     } catch (e) {
       toast.error(getErrorMessage(e), "Comentarios");
@@ -173,7 +176,8 @@ export function CourseDetailPage() {
     if (tab === "contenido") loadContent();
     if (tab === "comentarios") loadComments();
     if (tab === "resumen") loadRatingSummary();
-  }, [tab, courseId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, courseId]);
 
   async function onEnroll() {
     if (!courseId) return;
@@ -186,23 +190,30 @@ export function CourseDetailPage() {
     }
   }
 
-  async function onCompleteLesson(lesson_id: number) {
+  async function onCompleteLesson(lessonId: number) {
     try {
-      await markLessonCompleted(lesson_id);
-      setCompletedLessonIds((prev) => new Set(prev).add(lesson_id));
+      await markLessonCompleted(lessonId);
+      setCompletedLessonIds((prev) => new Set(prev).add(lessonId));
       toast.success("Lección completada.", "Progreso");
     } catch (e) {
-      toast.error(getErrorMessage(e, "No se pudo marcar completada."), "Progreso");
+      toast.error(
+        getErrorMessage(e, "No se pudo marcar completada."),
+        "Progreso"
+      );
     }
   }
 
-  async function onPostComment(e: React.FormEvent) {
+  async function onPostComment(e: FormEvent) {
     e.preventDefault();
-    if (!commentText.trim()) return;
+    if (!commentText.trim() || !courseId) return;
 
     setPostingComment(true);
     try {
-      await createComment({ course: courseId, texto: commentText.trim() });
+      await createComment({
+        course: courseId,
+        lesson: null,
+        texto: commentText.trim(),
+      });
       setCommentText("");
       toast.success("Comentario publicado.", "Comentarios");
       await loadComments();
@@ -220,7 +231,7 @@ export function CourseDetailPage() {
     if (!courseId) return;
     setRatingBusy(true);
     try {
-      await rateCourse({ course_id: courseId, rating: v });
+      await rateCourse({ course: courseId, rating: v });
       setMyRating(v);
       toast.success("Calificación guardada.", "Rating");
       await loadRatingSummary();
@@ -231,14 +242,17 @@ export function CourseDetailPage() {
     }
   }
 
-  // lección actualmente seleccionada
   const selectedLesson: Lesson | undefined = useMemo(
     () => lessons.find((l) => l.id === selectedLessonId),
     [lessons, selectedLessonId]
   );
 
-  if (loadingCourse) return <div className="card text-left">Cargando curso…</div>;
-  if (!course) return <div className="card text-left">No se encontró el curso.</div>;
+  if (loadingCourse) {
+    return <div className="card text-left">Cargando curso…</div>;
+  }
+  if (!course) {
+    return <div className="card text-left">No se encontró el curso.</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -246,17 +260,17 @@ export function CourseDetailPage() {
       <div className="card text-left">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-slate-900">{course.titulo}</h1>
-            <p className="mt-2">{course.descripcion}</p>
+            <h1 className="text-slate-900">{course.title}</h1>
+            <p className="mt-2">{course.description}</p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                {course.categoria}
+                {course.category}
               </span>
               <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                {course.nivel}
+                {course.level}
               </span>
               <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                {course.duracion} min
+                {course.duration} min
               </span>
             </div>
           </div>
@@ -294,7 +308,9 @@ export function CourseDetailPage() {
           {/* Header solo móvil */}
           <div className="mb-3 flex items-center justify-between lg:hidden">
             <div className="text-xs font-semibold text-slate-700">
-              {selectedLesson ? "Lección seleccionada" : "Selecciona una lección"}
+              {selectedLesson
+                ? "Lección seleccionada"
+                : "Selecciona una lección"}
             </div>
           </div>
 
@@ -313,8 +329,8 @@ export function CourseDetailPage() {
                 </div>
               ) : contentError === "no_enrollment" ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                  Debes estar inscrito en este curso para ver el contenido. Usa el
-                  botón “Inscribirme” arriba.
+                  Debes estar inscrito en este curso para ver el contenido. Usa
+                  el botón “Inscribirme” arriba.
                 </div>
               ) : modules.length === 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
@@ -324,17 +340,19 @@ export function CourseDetailPage() {
                 <div className="space-y-3">
                   {modules
                     .slice()
-                    .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
                     .map((m) => {
                       const items = lessons
-                        .filter((l) => l.module === m.id)
+                        .filter((l) => l.moduleId === m.id)
                         .slice()
-                        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
                       return (
-                        <AccordionItem key={m.id} title={m.titulo}>
+                        <AccordionItem key={m.id} title={m.title}>
                           {items.length === 0 ? (
-                            <div className="text-sm text-slate-600">Sin lecciones.</div>
+                            <div className="text-sm text-slate-600">
+                              Sin lecciones.
+                            </div>
                           ) : (
                             <div className="space-y-2">
                               {items.map((l) => {
@@ -353,17 +371,19 @@ export function CourseDetailPage() {
                                   >
                                     <div className="min-w-0">
                                       <div className="text-sm font-semibold text-slate-900">
-                                        {l.titulo}
+                                        {l.title}
                                       </div>
                                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                                         <span className="rounded-full bg-slate-100 px-2 py-0.5">
-                                          {l.tipo === "video"
+                                          {l.type === "video"
                                             ? "Video"
-                                            : l.tipo === "texto"
+                                            : l.type === "text"
                                             ? "Texto"
                                             : "Archivo"}
                                         </span>
-                                        {(l.url_video || l.contenido || l.archivo) && (
+                                        {(l.videoUrl ||
+                                          l.content ||
+                                          l.fileUrl) && (
                                           <span>
                                             Haz clic para ver el contenido.
                                           </span>
@@ -409,7 +429,7 @@ export function CourseDetailPage() {
               )}
             </div>
 
-            {/* Columna derecha: contenido principal de la lección */}
+            {/* Columna derecha: contenido de la lección */}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               {!selectedLesson ? (
                 <div className="text-sm text-slate-600">
@@ -418,45 +438,49 @@ export function CourseDetailPage() {
               ) : (
                 <div className="space-y-3">
                   <div className="text-sm font-semibold text-slate-900">
-                    {selectedLesson.titulo}
+                    {selectedLesson.title}
                   </div>
 
-                  {selectedLesson.tipo === "video" && selectedLesson.url_video ? (
+                  {selectedLesson.type === "video" &&
+                  selectedLesson.videoUrl ? (
                     <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
                       <video
-                        key={selectedLesson.url_video}
+                        key={selectedLesson.videoUrl}
                         controls
                         className="h-full w-full"
-                        src={selectedLesson.url_video}
+                        src={selectedLesson.videoUrl}
                       />
                     </div>
                   ) : null}
 
-                  {selectedLesson.tipo === "texto" && selectedLesson.contenido && (
-                    <div className="prose prose-sm max-w-none text-slate-800">
-                      {selectedLesson.contenido}
-                    </div>
-                  )}
+                  {selectedLesson.type === "text" &&
+                    selectedLesson.content && (
+                      <div className="prose prose-sm max-w-none text-slate-800">
+                        {selectedLesson.content}
+                      </div>
+                    )}
 
-                  {selectedLesson.tipo === "archivo" && selectedLesson.archivo && (
-                    <div className="text-sm text-slate-700">
-                      <p className="mb-2">
-                        Este recurso está disponible como archivo descargable.
-                      </p>
-                      <a
-                        href={selectedLesson.archivo}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
-                      >
-                        Descargar archivo
-                      </a>
-                    </div>
-                  )}
+                  {selectedLesson.type === "file" &&
+                    selectedLesson.fileUrl && (
+                      <div className="text-sm text-slate-700">
+                        <p className="mb-2">
+                          Este recurso está disponible como archivo
+                          descargable.
+                        </p>
+                        <a
+                          href={selectedLesson.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                        >
+                          Descargar archivo
+                        </a>
+                      </div>
+                    )}
 
-                  {!selectedLesson.url_video &&
-                    !selectedLesson.contenido &&
-                    !selectedLesson.archivo && (
+                  {!selectedLesson.videoUrl &&
+                    !selectedLesson.content &&
+                    !selectedLesson.fileUrl && (
                       <div className="text-sm text-slate-600">
                         Esta lección aún no tiene contenido asignado.
                       </div>
@@ -466,7 +490,6 @@ export function CourseDetailPage() {
             </div>
           </div>
         </TabPanel>
-
 
         {/* COMENTARIOS */}
         <TabPanel tabKey="comentarios" activeKey={tab}>
@@ -501,7 +524,9 @@ export function CourseDetailPage() {
             )}
 
             {loadingComments ? (
-              <div className="text-sm text-slate-600">Cargando comentarios…</div>
+              <div className="text-sm text-slate-600">
+                Cargando comentarios…
+              </div>
             ) : comments.length === 0 ? (
               <div className="text-sm text-slate-600">
                 Aún no hay comentarios.
@@ -515,7 +540,9 @@ export function CourseDetailPage() {
                   >
                     <div className="mb-1 text-xs text-slate-500">
                       Usuario
-                      {c.fecha ? " · " + new Date(c.fecha).toLocaleString() : ""}
+                      {c.fecha
+                        ? " · " + new Date(c.fecha).toLocaleString()
+                        : ""}
                     </div>
                     <div className="text-slate-800">{c.texto}</div>
                   </div>
@@ -528,7 +555,7 @@ export function CourseDetailPage() {
         {/* RESUMEN / RATING */}
         <TabPanel tabKey="resumen" activeKey={tab}>
           <div className="space-y-4">
-            {avgRating && ratingsCount > 0 ? (
+            {avgRating != null && ratingsCount > 0 ? (
               <div className="space-y-1">
                 <div className="text-sm font-semibold text-slate-900">
                   Calificación promedio: {avgRating.toFixed(1)} / 5
@@ -555,7 +582,9 @@ export function CourseDetailPage() {
                       disabled={ratingBusy}
                       className={
                         "text-2xl " +
-                        (v <= myRating ? "text-yellow-400" : "text-slate-300") +
+                        (v <= myRating
+                          ? "text-yellow-400"
+                          : "text-slate-300") +
                         " hover:text-yellow-500 disabled:opacity-60"
                       }
                     >

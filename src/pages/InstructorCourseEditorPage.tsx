@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -6,7 +11,7 @@ import { Tabs, TabPanel } from "../components/ui/Tabs";
 import { useToast } from "../components/ui/ToastProvider";
 import { getErrorMessage } from "../services/errors";
 
-import type { Quiz, Question, Choice } from "../types/courses";
+import type { Quiz, Question, Choice, Course, Module, Lesson } from "../types/courses";
 import {
   instructorListQuizzes,
   instructorCreateQuiz,
@@ -20,27 +25,22 @@ import {
   instructorCreateChoice,
   instructorUpdateChoice,
   instructorDeleteChoice,
-} from "../services/instructorService";
-
-import type { Course, Module, Lesson } from "../types/courses";
-import { getCourseDetail } from "../services/courseService";
-import {
-  instructorCreateLesson,
+  instructorListModules,
   instructorCreateModule,
-  instructorDeleteCourse,
-  instructorDeleteLesson,
+  instructorUpdateModule,
   instructorDeleteModule,
   instructorListLessons,
-  instructorListModules,
-  instructorUpdateCourse,
+  instructorCreateLesson,
   instructorUpdateLesson,
-  instructorUpdateModule,
+  instructorDeleteLesson,
+  instructorUpdateCourse,
+  instructorDeleteCourse,
 } from "../services/instructorService";
+import { getCourseDetail } from "../services/coursesService";
 
 type TabKey = "curso" | "modulos" | "lecciones" | "quizzes";
 type LessonTipo = "video" | "texto" | "archivo";
 
-// AJUSTA si tu backend usa otros valores
 type CourseEstado = "borrador" | "publicado";
 type CourseNivel = "basico" | "intermedio" | "avanzado";
 
@@ -51,7 +51,6 @@ export function InstructorCourseEditorPage() {
   const { id } = useParams();
   const courseId = Number(id);
   const navigate = useNavigate();
-
   const toast = useToast();
 
   const [tab, setTab] = useState<TabKey>("curso");
@@ -80,7 +79,6 @@ export function InstructorCourseEditorPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loadingLessons, setLoadingLessons] = useState(false);
 
-  // ✅ separado: módulo para crear vs módulo para filtrar
   const [createModuleId, setCreateModuleId] = useState<number | "">("");
   const [filterModuleId, setFilterModuleId] = useState<number | "">("");
 
@@ -115,16 +113,15 @@ export function InstructorCourseEditorPage() {
   const [choiceText, setChoiceText] = useState("");
   const [choiceCorrect, setChoiceCorrect] = useState(false);
 
-
   const orderedModules = useMemo(
-    () => modules.slice().sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+    () => modules.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [modules]
   );
 
   const filteredLessons = useMemo(() => {
-    const base = lessons.slice().sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const base = lessons.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     if (!filterModuleId) return base;
-    return base.filter((l) => l.module === filterModuleId);
+    return base.filter((l) => l.moduleId === filterModuleId);
   }, [lessons, filterModuleId]);
 
   async function loadCourse() {
@@ -134,14 +131,14 @@ export function InstructorCourseEditorPage() {
       const c = await getCourseDetail(courseId);
       setCourse(c);
 
-      document.title = `Editar: ${c.titulo ?? "Curso"} | Instructor`;
+      document.title = `Editar: ${c.title ?? "Curso"} | Instructor`;
 
-      setTitulo(c.titulo ?? "");
-      setDescripcion(c.descripcion ?? "");
-      setCategoria(c.categoria ?? "");
-      setNivel(((c.nivel as CourseNivel) ?? "basico") as CourseNivel);
-      setDuracion(Number(c.duracion ?? 0));
-      setEstado(((c.estado as CourseEstado) ?? "borrador") as CourseEstado);
+      setTitulo(c.title ?? "");
+      setDescripcion(c.description ?? "");
+      setCategoria(c.category ?? "");
+      setNivel(((c.level as CourseNivel) ?? "basico") as CourseNivel);
+      setDuracion(Number(c.duration ?? 0));
+      setEstado((c.status === "published" ? "publicado" : "borrador") as CourseEstado);
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudo cargar el curso."), "Instructor");
     } finally {
@@ -153,8 +150,8 @@ export function InstructorCourseEditorPage() {
     if (!courseId) return;
     setLoadingModules(true);
     try {
-      const data = await instructorListModules({ course_id: courseId });
-      setModules(data.filter((m) => m.course === courseId));
+      const data = await instructorListModules({ courseId });
+      setModules(data);
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudieron cargar los módulos."), "Instructor");
     } finally {
@@ -166,10 +163,12 @@ export function InstructorCourseEditorPage() {
     if (!courseId) return;
     setLoadingLessons(true);
     try {
-      const data = await instructorListLessons({ course_id: courseId });
+      const data = await instructorListLessons({ courseId });
       const effectiveModules = mods ?? modules;
       const moduleIds = new Set(effectiveModules.map((m) => m.id));
-      const filtered = data.filter((l) => moduleIds.size === 0 || moduleIds.has(l.module));
+      const filtered = data.filter(
+        (l) => moduleIds.size === 0 || moduleIds.has(l.moduleId)
+      );
       setLessons(filtered);
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudieron cargar las lecciones."), "Instructor");
@@ -177,11 +176,12 @@ export function InstructorCourseEditorPage() {
       setLoadingLessons(false);
     }
   }
+
   async function loadQuizzes() {
     if (!courseId) return;
     setLoadingQuizzes(true);
     try {
-      const data = await instructorListQuizzes({ course_id: courseId });
+      const data = await instructorListQuizzes({ courseId });
       setQuizzes(data);
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudieron cargar los quizzes."), "Instructor");
@@ -193,7 +193,7 @@ export function InstructorCourseEditorPage() {
   async function loadQuestions(quizId: number) {
     setLoadingQuestions(true);
     try {
-      const data = await instructorListQuestions({ quiz_id: quizId });
+      const data = await instructorListQuestions({ quizId });
       setQuestions(data);
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudieron cargar las preguntas."), "Instructor");
@@ -205,7 +205,7 @@ export function InstructorCourseEditorPage() {
   async function loadChoices(questionId: number) {
     setLoadingChoices(true);
     try {
-      const data = await instructorListChoices({ question_id: questionId });
+      const data = await instructorListChoices({ questionId });
       setChoices(data);
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudieron cargar las opciones."), "Instructor");
@@ -214,9 +214,7 @@ export function InstructorCourseEditorPage() {
     }
   }
 
-
   useEffect(() => {
-    // reset básico al cambiar de curso
     setCourse(null);
     setModules([]);
     setLessons([]);
@@ -232,8 +230,8 @@ export function InstructorCourseEditorPage() {
     if (tab === "lecciones") {
       (async () => {
         await loadModules();
-        const mods = await instructorListModules({ course_id: courseId }).catch(() => []);
-        setModules(mods.filter((m) => m.course === courseId));
+        const mods = await instructorListModules({ courseId }).catch(() => []);
+        setModules(mods);
         await loadLessons(mods as Module[]);
       })();
     }
@@ -246,18 +244,17 @@ export function InstructorCourseEditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-
   async function onSaveCourse() {
     if (!courseId) return;
     setSavingCourse(true);
     try {
       const updated = await instructorUpdateCourse(courseId, {
-        titulo: titulo.trim(),
-        descripcion: descripcion.trim(),
-        categoria,
-        nivel,
-        duracion: Number(duracion) || 0,
-        estado,
+        title: titulo.trim(),
+        description: descripcion.trim(),
+        category: categoria,
+        level: nivel,
+        duration: Number(duracion) || 0,
+        status: estado === "publicado" ? "published" : "draft",
       });
       setCourse(updated);
       toast.success("Curso actualizado.", "Instructor");
@@ -289,9 +286,9 @@ export function InstructorCourseEditorPage() {
     setCreatingModule(true);
     try {
       await instructorCreateModule({
-        course: courseId,
-        titulo: moduleTitle.trim(),
-        orden: Number(moduleOrder) || 0,
+        courseId,
+        title: moduleTitle.trim(),
+        order: Number(moduleOrder) || 0,
       });
       setModuleTitle("");
       setModuleOrder(1);
@@ -305,11 +302,11 @@ export function InstructorCourseEditorPage() {
   }
 
   async function onUpdateModule(m: Module) {
-    const newTitle = prompt("Nuevo título del módulo:", m.titulo);
+    const newTitle = prompt("Nuevo título del módulo:", m.title);
     if (newTitle === null) return;
 
     try {
-      await instructorUpdateModule(m.id, { titulo: newTitle.trim() });
+      await instructorUpdateModule(m.id, { title: newTitle.trim() });
       toast.success("Módulo actualizado.", "Instructor");
       await loadModules();
     } catch (e) {
@@ -348,11 +345,11 @@ export function InstructorCourseEditorPage() {
     if (!lessonTitle.trim()) return;
 
     if (lessonTipo === "video" && !lessonVideoUrl.trim()) {
-      toast.error("url_video es obligatorio cuando tipo=video.", "Instructor");
+      toast.error("videoUrl es obligatorio cuando tipo=video.", "Instructor");
       return;
     }
     if (lessonTipo === "texto" && !lessonContent.trim()) {
-      toast.error("contenido es obligatorio cuando tipo=texto.", "Instructor");
+      toast.error("content es obligatorio cuando tipo=texto.", "Instructor");
       return;
     }
     if (lessonTipo === "archivo") {
@@ -370,27 +367,27 @@ export function InstructorCourseEditorPage() {
     try {
       if (lessonTipo === "video") {
         await instructorCreateLesson({
-          module: createModuleId,
-          titulo: lessonTitle.trim(),
-          tipo: "video",
-          orden: Number(lessonOrder) || 0,
-          url_video: lessonVideoUrl.trim(),
+          moduleId: createModuleId,
+          title: lessonTitle.trim(),
+          type: "video",
+          order: Number(lessonOrder) || 0,
+          videoUrl: lessonVideoUrl.trim(),
         });
       } else if (lessonTipo === "texto") {
         await instructorCreateLesson({
-          module: createModuleId,
-          titulo: lessonTitle.trim(),
-          tipo: "texto",
-          orden: Number(lessonOrder) || 0,
-          contenido: lessonContent.trim(),
+          moduleId: createModuleId,
+          title: lessonTitle.trim(),
+          type: "text",
+          order: Number(lessonOrder) || 0,
+          content: lessonContent.trim(),
         });
       } else {
         await instructorCreateLesson({
-          module: createModuleId,
-          titulo: lessonTitle.trim(),
-          tipo: "archivo",
-          orden: Number(lessonOrder) || 0,
-          archivo: lessonFile!,
+          moduleId: createModuleId,
+          title: lessonTitle.trim(),
+          type: "file",
+          order: Number(lessonOrder) || 0,
+          file: lessonFile!,
         });
       }
 
@@ -405,11 +402,11 @@ export function InstructorCourseEditorPage() {
   }
 
   async function onUpdateLesson(l: Lesson) {
-    const newTitle = prompt("Nuevo título de la lección:", l.titulo);
+    const newTitle = prompt("Nuevo título de la lección:", l.title);
     if (newTitle === null) return;
 
     try {
-      await instructorUpdateLesson(l.id, { titulo: newTitle.trim() });
+      await instructorUpdateLesson(l.id, { title: newTitle.trim() });
       toast.success("Lección actualizada.", "Instructor");
       await loadLessons();
     } catch (e) {
@@ -434,7 +431,7 @@ export function InstructorCourseEditorPage() {
       }
 
       try {
-        await instructorUpdateLesson(l.id, { archivo: file });
+        await instructorUpdateLesson(l.id, { file });
         toast.success("PDF actualizado.", "Instructor");
         await loadLessons();
       } catch (e) {
@@ -456,6 +453,7 @@ export function InstructorCourseEditorPage() {
       toast.error(getErrorMessage(e, "No se pudo eliminar la lección."), "Instructor");
     }
   }
+
   async function onCreateQuiz() {
     if (!quizTitle.trim()) return;
 
@@ -463,8 +461,8 @@ export function InstructorCourseEditorPage() {
       await instructorCreateQuiz({
         course: quizModuleId ? null : courseId,
         module: quizModuleId || null,
-        titulo: quizTitle.trim(),
-        descripcion: quizDescription.trim() || undefined,
+        title: quizTitle.trim(),
+        description: quizDescription.trim() || undefined,
       });
       toast.success("Quiz creado.", "Instructor");
       setQuizTitle("");
@@ -477,10 +475,10 @@ export function InstructorCourseEditorPage() {
   }
 
   async function onUpdateQuiz(q: Quiz) {
-    const newTitle = prompt("Nuevo título del quiz:", q.titulo);
+    const newTitle = prompt("Nuevo título del quiz:", q.title);
     if (newTitle === null) return;
     try {
-      await instructorUpdateQuiz(q.id, { titulo: newTitle.trim() });
+      await instructorUpdateQuiz(q.id, { title: newTitle.trim() });
       toast.success("Quiz actualizado.", "Instructor");
       await loadQuizzes();
     } catch (e) {
@@ -513,8 +511,8 @@ export function InstructorCourseEditorPage() {
     try {
       await instructorCreateQuestion({
         quiz: selectedQuizId,
-        texto: questionText.trim(),
-        orden: Number(questionOrder) || 0,
+        text: questionText.trim(),
+        order: Number(questionOrder) || 0,
       });
       toast.success("Pregunta creada.", "Instructor");
       setQuestionText("");
@@ -526,10 +524,10 @@ export function InstructorCourseEditorPage() {
   }
 
   async function onUpdateQuestion(q: Question) {
-    const newText = prompt("Nuevo texto de la pregunta:", q.texto);
+    const newText = prompt("Nuevo texto de la pregunta:", q.text);
     if (newText === null) return;
     try {
-      await instructorUpdateQuestion(q.id, { texto: newText.trim() });
+      await instructorUpdateQuestion(q.id, { text: newText.trim() });
       toast.success("Pregunta actualizada.", "Instructor");
       if (selectedQuizId) await loadQuestions(selectedQuizId);
     } catch (e) {
@@ -563,8 +561,8 @@ export function InstructorCourseEditorPage() {
     try {
       await instructorCreateChoice({
         question: selectedQuestionId,
-        texto: choiceText.trim(),
-        correcta: choiceCorrect,
+        text: choiceText.trim(),
+        isCorrect: choiceCorrect,
       });
       toast.success("Opción creada.", "Instructor");
       setChoiceText("");
@@ -576,10 +574,10 @@ export function InstructorCourseEditorPage() {
   }
 
   async function onUpdateChoice(c: Choice) {
-    const newText = prompt("Nuevo texto de la opción:", c.texto);
+    const newText = prompt("Nuevo texto de la opción:", c.text);
     if (newText === null) return;
     try {
-      await instructorUpdateChoice(c.id, { texto: newText.trim() });
+      await instructorUpdateChoice(c.id, { text: newText.trim() });
       toast.success("Opción actualizada.", "Instructor");
       if (selectedQuestionId) await loadChoices(selectedQuestionId);
     } catch (e) {
@@ -589,8 +587,8 @@ export function InstructorCourseEditorPage() {
 
   async function onToggleChoiceCorrect(c: Choice) {
     try {
-      await instructorUpdateChoice(c.id, { correcta: !c.correcta });
-      await loadChoices(c.question);
+      await instructorUpdateChoice(c.id, { isCorrect: !c.isCorrect });
+      if (selectedQuestionId) await loadChoices(selectedQuestionId);
     } catch (e) {
       toast.error(getErrorMessage(e, "No se pudo actualizar la opción."), "Instructor");
     }
@@ -608,7 +606,6 @@ export function InstructorCourseEditorPage() {
     }
   }
 
-
   if (loading) return <div className="card text-left">Cargando editor…</div>;
   if (!course) return <div className="card text-left">No se encontró el curso.</div>;
 
@@ -619,7 +616,7 @@ export function InstructorCourseEditorPage() {
         <div className="space-y-1">
           <h1 className="text-xl font-bold text-slate-900">Editar curso</h1>
           <div className="text-sm text-slate-600">
-            <span className="font-semibold text-slate-900">{course.titulo}</span>{" "}
+            <span className="font-semibold text-slate-900">{course.title}</span>{" "}
             • ID {course.id}
           </div>
         </div>
@@ -804,10 +801,10 @@ export function InstructorCourseEditorPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-slate-900">
-                          {m.titulo}
+                          {m.title}
                         </div>
                         <div className="text-xs text-slate-500">
-                          Orden: {m.orden ?? 0}
+                          Orden: {m.order ?? 0}
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -869,7 +866,7 @@ export function InstructorCourseEditorPage() {
                   <option value="">Selecciona módulo</option>
                   {orderedModules.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.titulo}
+                      {m.title}
                     </option>
                   ))}
                 </select>
@@ -909,7 +906,7 @@ export function InstructorCourseEditorPage() {
                       onChange={(e) =>
                         setLessonVideoUrl(e.target.value)
                       }
-                      placeholder="url_video (obligatorio)"
+                      placeholder="videoUrl (obligatorio)"
                     />
                   </div>
                 )}
@@ -922,7 +919,7 @@ export function InstructorCourseEditorPage() {
                       onChange={(e) =>
                         setLessonContent(e.target.value)
                       }
-                      placeholder="contenido (obligatorio)"
+                      placeholder="content (obligatorio)"
                     />
                   </div>
                 )}
@@ -981,7 +978,7 @@ export function InstructorCourseEditorPage() {
                 <option value="">Todos</option>
                 {orderedModules.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.titulo}
+                    {m.title}
                   </option>
                 ))}
               </select>
@@ -1003,15 +1000,15 @@ export function InstructorCourseEditorPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-slate-900">
-                          {l.titulo}
+                          {l.title}
                         </div>
                         <div className="text-xs text-slate-500">
-                          Módulo #{l.module} • Orden {l.orden ?? 0} •
-                          Tipo {l.tipo}
-                          {l.tipo === "video" && l.url_video
+                          Módulo #{l.moduleId} • Orden {l.order ?? 0} •
+                          Tipo {l.type}
+                          {l.type === "video" && l.videoUrl
                             ? " • Con video"
                             : ""}
-                          {l.tipo === "archivo" && l.archivo
+                          {l.type === "file" && l.fileUrl
                             ? " • Con PDF"
                             : ""}
                         </div>
@@ -1025,7 +1022,7 @@ export function InstructorCourseEditorPage() {
                           Editar título
                         </Button>
 
-                        {l.tipo === "archivo" && (
+                        {l.type === "file" && (
                           <Button
                             variant="secondary"
                             onClick={() => onReplaceLessonPdf(l)}
@@ -1043,10 +1040,10 @@ export function InstructorCourseEditorPage() {
                       </div>
                     </div>
 
-                    {l.tipo === "video" && l.url_video && (
+                    {l.type === "video" && l.videoUrl && (
                       <a
                         className="mt-2 inline-block text-sm text-blue-600 hover:text-blue-700"
-                        href={l.url_video}
+                        href={l.videoUrl}
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -1054,10 +1051,10 @@ export function InstructorCourseEditorPage() {
                       </a>
                     )}
 
-                    {l.tipo === "archivo" && l.archivo && (
+                    {l.type === "file" && l.fileUrl && (
                       <a
                         className="mt-2 inline-block text-sm text-blue-600 hover:text-blue-700"
-                        href={l.archivo}
+                        href={l.fileUrl}
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -1107,7 +1104,7 @@ export function InstructorCourseEditorPage() {
                   </option>
                   {orderedModules.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.titulo}
+                      {m.title}
                     </option>
                   ))}
                 </select>
@@ -1172,12 +1169,12 @@ export function InstructorCourseEditorPage() {
                           }}
                         >
                           <div className="text-sm font-semibold text-slate-900">
-                            {q.titulo}
+                            {q.title}
                           </div>
                           <div className="text-xs text-slate-500">
-                            {q.descripcion || "Sin descripción"} •{" "}
-                            {q.module
-                              ? `Módulo #${q.module}`
+                            {q.description || "Sin descripción"} •{" "}
+                            {q.moduleId
+                              ? `Módulo #${q.moduleId}`
                               : "Nivel curso"}
                           </div>
                         </div>
@@ -1266,10 +1263,10 @@ export function InstructorCourseEditorPage() {
                                       }}
                                     >
                                       <div className="text-sm font-semibold text-slate-900">
-                                        {qq.texto}
+                                        {qq.text}
                                       </div>
                                       <div className="text-xs text-slate-500">
-                                        Orden {qq.orden}
+                                        Orden {qq.order}
                                       </div>
                                     </div>
 
@@ -1365,10 +1362,10 @@ export function InstructorCourseEditorPage() {
                             >
                               <div className="min-w-0">
                                 <div className="text-sm text-slate-900">
-                                  {c.texto}
+                                  {c.text}
                                 </div>
                                 <div className="text-xs text-slate-500">
-                                  {c.correcta
+                                  {c.isCorrect
                                     ? "Correcta"
                                     : "Incorrecta"}
                                 </div>
@@ -1380,7 +1377,7 @@ export function InstructorCourseEditorPage() {
                                     onToggleChoiceCorrect(c)
                                   }
                                 >
-                                  {c.correcta
+                                  {c.isCorrect
                                     ? "Marcar incorrecta"
                                     : "Marcar correcta"}
                                 </Button>
